@@ -3,120 +3,136 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <errno.h>
 
-#define MAX_INPUT_LEN 1024
 #define MAX_ARGS 64
-#define PROMPT "minishell$ "
+#define PROMPT "myshell$ "
 
 /**
- * parse_input - Splits the input line into an array of arguments.
- * @line: The raw input string (will be modified in place).
- * @args: Output array of argument pointers.
+ * parse_input - Tokenizes a command line into an argv-style array.
+ * @line: The raw input string (modified in place by strtok).
+ * @argv: Output array of argument pointers, NULL-terminated.
  *
- * Return: Number of arguments parsed.
+ * Return: Number of arguments parsed (0 if the line was empty).
  */
-static int parse_input(char *line, char *args[])
+static int parse_input(char *line, char *argv[])
 {
     int argc = 0;
     char *token = strtok(line, " \t\n");
 
     while (token != NULL && argc < MAX_ARGS - 1) {
-        args[argc++] = token;
+        argv[argc++] = token;
         token = strtok(NULL, " \t\n");
     }
-    args[argc] = NULL;
+    argv[argc] = NULL;
     return argc;
 }
 
 /**
- * builtin_cd - Handle the built-in 'cd' command.
- * @args: Argument list where args[1] is the target directory.
+ * builtin_cd - Changes the current working directory.
+ * @argv: Argument list where argv[1] is the target directory.
  *
- * Return: 0 on success, -1 on failure.
+ * If no argument is given, changes to the HOME directory.
+ * Runs in the parent process (no fork) so the directory change persists.
  */
-static int builtin_cd(char *args[])
+static void builtin_cd(char *argv[])
 {
-    const char *dir = args[1];
+    const char *dir = argv[1];
 
+    /* Default to HOME if no argument is provided */
     if (dir == NULL) {
         dir = getenv("HOME");
         if (dir == NULL) {
             fprintf(stderr, "cd: HOME not set\n");
-            return -1;
+            return;
         }
     }
 
-    if (chdir(dir) != 0) {
+    if (chdir(dir) != 0)
         perror("cd");
-        return -1;
-    }
-    return 0;
 }
 
 /**
- * execute_command - Fork and exec an external command.
- * @args: NULL-terminated argument list.
+ * execute_command - Forks a child process to run an external command.
+ * @argv: NULL-terminated argument list (argv[0] is the program name).
  *
- * Return: Exit status of the child process, or -1 on fork failure.
+ * The parent waits for the child to finish. If execvp() fails in the
+ * child, an error is printed via perror() and the child exits.
  */
-static int execute_command(char *args[])
+static void execute_command(char *argv[])
 {
     pid_t pid = fork();
 
     if (pid < 0) {
+        /* fork() failed */
         perror("fork");
-        return -1;
+        return;
     }
 
     if (pid == 0) {
-        /* Child process */
-        execvp(args[0], args);
-        fprintf(stderr, "%s: %s\n", args[0], strerror(errno));
+        /* Child: replace this process with the requested command */
+        execvp(argv[0], argv);
+        /* execvp only returns on failure */
+        perror(argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    /* Parent process */
+    /* Parent: wait for the child to finish */
     int status;
     waitpid(pid, &status, 0);
-
-    if (WIFEXITED(status))
-        return WEXITSTATUS(status);
-
-    return -1;
 }
 
+/**
+ * main - Entry point for the mini shell.
+ *
+ * Runs an infinite read-eval-execute loop:
+ *   1. Print the prompt.
+ *   2. Read one line of input with getline().
+ *   3. Skip empty lines.
+ *   4. Parse the line into argv tokens.
+ *   5. Fork + exec the command.
+ *
+ * The loop exits gracefully on EOF (Ctrl+D).
+ */
 int main(void)
 {
-    char input[MAX_INPUT_LEN];
-    char *args[MAX_ARGS];
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t nread;
+    char *argv[MAX_ARGS];
 
     while (1) {
+        /* Display the prompt */
         printf("%s", PROMPT);
         fflush(stdout);
 
-        if (fgets(input, sizeof(input), stdin) == NULL) {
-            /* Handle EOF (Ctrl+D) */
+        /* Read a line of input; getline() allocates/resizes the buffer */
+        nread = getline(&line, &len, stdin);
+        if (nread == -1) {
+            /* EOF (Ctrl+D) — exit gracefully */
             printf("\n");
             break;
         }
 
-        int argc = parse_input(input, args);
-        if (argc == 0)
-            continue;
+        /* Parse the line into arguments */
+        if (parse_input(line, argv) == 0)
+            continue;   /* empty input, re-prompt */
 
-        /* Built-in: exit */
-        if (strcmp(args[0], "exit") == 0)
-            break;
-
-        /* Built-in: cd */
-        if (strcmp(args[0], "cd") == 0) {
-            builtin_cd(args);
+        /* Built-in: cd (must run in parent, not a child process) */
+        if (strcmp(argv[0], "cd") == 0) {
+            builtin_cd(argv);
             continue;
         }
 
-        execute_command(args);
+        /* Built-in: exit (break the loop, clean up, and return 0) */
+        if (strcmp(argv[0], "exit") == 0)
+            break;
+
+        /* Fork and execute the external command */
+        execute_command(argv);
     }
+
+    /* Clean up the buffer allocated by getline() */
+    free(line);
 
     return EXIT_SUCCESS;
 }
