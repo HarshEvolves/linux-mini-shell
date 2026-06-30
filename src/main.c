@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 
 #define MAX_ARGS      64
@@ -117,15 +118,131 @@ static void builtin_cd(char *argv[])
         perror("cd");
 }
 
+/* --- I/O redirection ---------------------------------------------------- */
+
+/**
+ * struct redirection - Holds parsed redirection targets for a command.
+ * @infile:   Filename for input  redirection (< file),  or NULL.
+ * @outfile:  Filename for output redirection (> / >> file), or NULL.
+ * @append:   If true, open outfile in append mode (>>); otherwise truncate (>).
+ */
+typedef struct {
+    char *infile;
+    char *outfile;
+    int   append;
+} redirection_t;
+
+/**
+ * parse_redirection - Scans argv for <, >, >> tokens and extracts filenames.
+ * @argv:  The argument array (modified in place — redirection tokens are
+ *         removed so argv contains only the command and its arguments).
+ * @redir: Output structure filled with any redirection targets found.
+ *
+ * Return: 0 on success, -1 if a redirection operator has no filename after it.
+ */
+static int parse_redirection(char *argv[], redirection_t *redir)
+{
+    redir->infile  = NULL;
+    redir->outfile = NULL;
+    redir->append  = 0;
+
+    int i = 0;  /* read index  */
+    int j = 0;  /* write index */
+
+    while (argv[i] != NULL) {
+        if (strcmp(argv[i], ">") == 0) {
+            /* Output redirection (truncate) */
+            if (argv[i + 1] == NULL) {
+                fprintf(stderr, "syntax error: expected filename after >\n");
+                return -1;
+            }
+            redir->outfile = argv[i + 1];
+            redir->append  = 0;
+            i += 2;  /* skip '>' and the filename */
+
+        } else if (strcmp(argv[i], ">>") == 0) {
+            /* Output redirection (append) */
+            if (argv[i + 1] == NULL) {
+                fprintf(stderr, "syntax error: expected filename after >>\n");
+                return -1;
+            }
+            redir->outfile = argv[i + 1];
+            redir->append  = 1;
+            i += 2;
+
+        } else if (strcmp(argv[i], "<") == 0) {
+            /* Input redirection */
+            if (argv[i + 1] == NULL) {
+                fprintf(stderr, "syntax error: expected filename after <\n");
+                return -1;
+            }
+            redir->infile = argv[i + 1];
+            i += 2;
+
+        } else {
+            /* Regular argument — keep it */
+            argv[j++] = argv[i++];
+        }
+    }
+    argv[j] = NULL;
+    return 0;
+}
+
+/**
+ * setup_redirection - Opens files and redirects stdin/stdout via dup2().
+ * @redir: The parsed redirection targets.
+ *
+ * Must be called in the child process before execvp().  If any open()
+ * or dup2() call fails, an error is printed and the child exits.
+ */
+static void setup_redirection(const redirection_t *redir)
+{
+    /* Input redirection: open file as read-only and map to stdin */
+    if (redir->infile != NULL) {
+        int fd = open(redir->infile, O_RDONLY);
+        if (fd < 0) {
+            perror(redir->infile);
+            exit(EXIT_FAILURE);
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+    }
+
+    /* Output redirection: open/create file and map to stdout */
+    if (redir->outfile != NULL) {
+        int flags = O_WRONLY | O_CREAT;
+        flags |= redir->append ? O_APPEND : O_TRUNC;
+
+        int fd = open(redir->outfile, flags, 0644);
+        if (fd < 0) {
+            perror(redir->outfile);
+            exit(EXIT_FAILURE);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
+}
+
 /**
  * execute_command - Forks a child process to run an external command.
  * @argv: NULL-terminated argument list (argv[0] is the program name).
  *
- * The parent waits for the child to finish. If execvp() fails in the
- * child, an error is printed via perror() and the child exits.
+ * Parses any I/O redirection operators from argv, then forks.  The child
+ * sets up redirection before calling execvp().  The parent waits for the
+ * child to finish.
  */
 static void execute_command(char *argv[])
 {
+    redirection_t redir;
+
+    /* Extract redirection operators from argv */
+    if (parse_redirection(argv, &redir) != 0)
+        return;
+
+    /* Ensure a command remains after stripping redirection tokens */
+    if (argv[0] == NULL)
+        return;
+
     pid_t pid = fork();
 
     if (pid < 0) {
@@ -135,7 +252,8 @@ static void execute_command(char *argv[])
     }
 
     if (pid == 0) {
-        /* Child: replace this process with the requested command */
+        /* Child: set up any redirections, then exec */
+        setup_redirection(&redir);
         execvp(argv[0], argv);
         /* execvp only returns on failure */
         perror(argv[0]);
