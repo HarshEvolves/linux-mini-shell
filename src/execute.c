@@ -2,44 +2,36 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include "parser.h"
+#include "command.h"
 #include "redirect.h"
 #include "execute.h"
 
 /**
  * execute_command - Forks a child process to run an external command.
- * @argv: NULL-terminated argument list (argv[0] is the program name).
+ * @cmd: A fully parsed Command (argv + redirection targets).
  *
- * Parses any I/O redirection operators from argv, then forks.  The child
- * sets up redirection before calling execvp().  The parent waits for the
- * child to finish.
+ * The child applies any I/O redirection, then calls execvp().
+ * The parent waits for the child to finish.
  */
-void execute_command(char *argv[])
+void execute_command(Command *cmd)
 {
-    redirection_t redir;
-
-    /* Extract redirection operators from argv */
-    if (parse_redirection(argv, &redir) != 0)
-        return;
-
-    /* Ensure a command remains after stripping redirection tokens */
-    if (argv[0] == NULL)
+    /* Ensure the command has a program to run */
+    if (cmd->argv[0] == NULL)
         return;
 
     pid_t pid = fork();
 
     if (pid < 0) {
-        /* fork() failed */
         perror("fork");
         return;
     }
 
     if (pid == 0) {
         /* Child: apply any redirections, then exec */
-        apply_redirection(&redir);
-        execvp(argv[0], argv);
+        apply_redirection(cmd);
+        execvp(cmd->argv[0], cmd->argv);
         /* execvp only returns on failure */
-        perror(argv[0]);
+        perror(cmd->argv[0]);
         exit(EXIT_FAILURE);
     }
 

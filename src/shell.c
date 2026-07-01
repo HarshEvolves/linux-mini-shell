@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "command.h"
 #include "parser.h"
 #include "execute.h"
 #include "pipe.h"
@@ -17,7 +18,7 @@
  *
  * Displays the prompt, reads input, dispatches built-in commands
  * (cd, exit, history) via the builtin module, and delegates external
- * commands and pipes to the execute module.
+ * commands and pipes to the execute / pipe modules.
  * Exits on EOF (Ctrl+D) or the "exit" command.
  */
 void shell_loop(void)
@@ -72,10 +73,14 @@ void shell_loop(void)
 
         /* Check for a pipe and route accordingly */
         int pipe_pos = find_pipe(argv);
-        if (pipe_pos >= 0)
+        if (pipe_pos >= 0) {
             execute_pipe(argv, pipe_pos);
-        else
-            execute_command(argv);
+        } else {
+            /* Build a Command from the tokenized argv and execute it */
+            Command cmd;
+            if (parse_command(argv, &cmd) == 0)
+                execute_command(&cmd);
+        }
     }
 
     /* Clean up all allocated memory */
