@@ -23,18 +23,20 @@ int parse_input(char *line, char *argv[])
 }
 
 /**
- * parse_redirection - Scans argv for <, >, >> tokens and extracts filenames.
- * @argv:  The argument array (modified in place — redirection tokens are
- *         removed so argv contains only the command and its arguments).
- * @redir: Output structure filled with any redirection targets found.
+ * parse_command - Builds a Command from a tokenized argument list.
+ * @argv: The argument array (scanned for <, >, >> tokens which are
+ *        extracted into the Command and removed from argv).
+ * @cmd:  Output Command structure populated with argv and redirection.
  *
- * Return: 0 on success, -1 if a redirection operator has no filename after it.
+ * Scans argv with a two-pointer approach: redirection operators and
+ * their filenames are stored in cmd->input_file / cmd->output_file,
+ * while regular arguments are compacted into cmd->argv.
+ *
+ * Return: 0 on success, -1 if a redirection operator has no filename.
  */
-int parse_redirection(char *argv[], redirection_t *redir)
+int parse_command(char *argv[], Command *cmd)
 {
-    redir->infile  = NULL;
-    redir->outfile = NULL;
-    redir->append  = 0;
+    command_init(cmd);
 
     int i = 0;  /* read index  */
     int j = 0;  /* write index */
@@ -46,9 +48,9 @@ int parse_redirection(char *argv[], redirection_t *redir)
                 fprintf(stderr, "syntax error: expected filename after >\n");
                 return -1;
             }
-            redir->outfile = argv[i + 1];
-            redir->append  = 0;
-            i += 2;  /* skip '>' and the filename */
+            cmd->output_file = argv[i + 1];
+            cmd->append      = 0;
+            i += 2;
 
         } else if (strcmp(argv[i], ">>") == 0) {
             /* Output redirection (append) */
@@ -56,8 +58,8 @@ int parse_redirection(char *argv[], redirection_t *redir)
                 fprintf(stderr, "syntax error: expected filename after >>\n");
                 return -1;
             }
-            redir->outfile = argv[i + 1];
-            redir->append  = 1;
+            cmd->output_file = argv[i + 1];
+            cmd->append      = 1;
             i += 2;
 
         } else if (strcmp(argv[i], "<") == 0) {
@@ -66,15 +68,15 @@ int parse_redirection(char *argv[], redirection_t *redir)
                 fprintf(stderr, "syntax error: expected filename after <\n");
                 return -1;
             }
-            redir->infile = argv[i + 1];
+            cmd->input_file = argv[i + 1];
             i += 2;
 
         } else {
-            /* Regular argument — keep it */
-            argv[j++] = argv[i++];
+            /* Regular argument — store in cmd->argv */
+            cmd->argv[j++] = argv[i++];
         }
     }
-    argv[j] = NULL;
+    cmd->argv[j] = NULL;
     return 0;
 }
 

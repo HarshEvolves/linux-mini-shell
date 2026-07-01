@@ -1,14 +1,15 @@
 #ifndef EXECUTE_H
 #define EXECUTE_H
 
+#include "command.h"
+
 /**
  * execute_command - Forks a child process to run an external command.
- * @argv: NULL-terminated argument list (argv[0] is the program name).
+ * @cmd: A fully parsed Command (argv + redirection targets).
  *
- * Parses any I/O redirection operators from argv, then forks.  The child
- * sets up redirection before calling execvp().  The parent waits for the
- * child to finish.
+ * The child applies any I/O redirection, then calls execvp().
+ * The parent waits for the child to finish.
  */
-void execute_command(char *argv[]);
+void execute_command(Command *cmd);
 
 #endif /* EXECUTE_H */
