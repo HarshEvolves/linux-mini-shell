@@ -1,45 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <sys/wait.h>
 #include "parser.h"
+#include "redirect.h"
 #include "execute.h"
-
-/**
- * setup_redirection - Opens files and redirects stdin/stdout via dup2().
- * @redir: The parsed redirection targets.
- *
- * Must be called in the child process before execvp().  If any open()
- * or dup2() call fails, an error is printed and the child exits.
- */
-static void setup_redirection(const redirection_t *redir)
-{
-    /* Input redirection: open file as read-only and map to stdin */
-    if (redir->infile != NULL) {
-        int fd = open(redir->infile, O_RDONLY);
-        if (fd < 0) {
-            perror(redir->infile);
-            exit(EXIT_FAILURE);
-        }
-        dup2(fd, STDIN_FILENO);
-        close(fd);
-    }
-
-    /* Output redirection: open/create file and map to stdout */
-    if (redir->outfile != NULL) {
-        int flags = O_WRONLY | O_CREAT;
-        flags |= redir->append ? O_APPEND : O_TRUNC;
-
-        int fd = open(redir->outfile, flags, 0644);
-        if (fd < 0) {
-            perror(redir->outfile);
-            exit(EXIT_FAILURE);
-        }
-        dup2(fd, STDOUT_FILENO);
-        close(fd);
-    }
-}
 
 /**
  * execute_command - Forks a child process to run an external command.
@@ -70,8 +35,8 @@ void execute_command(char *argv[])
     }
 
     if (pid == 0) {
-        /* Child: set up any redirections, then exec */
-        setup_redirection(&redir);
+        /* Child: apply any redirections, then exec */
+        apply_redirection(&redir);
         execvp(argv[0], argv);
         /* execvp only returns on failure */
         perror(argv[0]);
@@ -138,7 +103,7 @@ void execute_pipeline(char *argv[], int pipe_pos)
         close(pipefd[1]);
 
         /* Apply any additional file redirection (e.g. < infile) */
-        setup_redirection(&left_redir);
+        apply_redirection(&left_redir);
 
         execvp(left_argv[0], left_argv);
         perror(left_argv[0]);
@@ -162,7 +127,7 @@ void execute_pipeline(char *argv[], int pipe_pos)
         close(pipefd[1]);
 
         /* Apply any additional file redirection (e.g. > outfile) */
-        setup_redirection(&right_redir);
+        apply_redirection(&right_redir);
 
         execvp(right_argv[0], right_argv);
         perror(right_argv[0]);
