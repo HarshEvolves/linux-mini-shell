@@ -3,6 +3,7 @@
 #include <string.h>
 #include "parser.h"
 #include "execute.h"
+#include "pipe.h"
 #include "builtin.h"
 #include "history.h"
 #include "shell.h"
@@ -72,7 +73,7 @@ void shell_loop(void)
         /* Check for a pipe and route accordingly */
         int pipe_pos = find_pipe(argv);
         if (pipe_pos >= 0)
-            execute_pipeline(argv, pipe_pos);
+            execute_pipe(argv, pipe_pos);
         else
             execute_command(argv);
     }
