@@ -4,6 +4,9 @@ build/
 *.out
 *.log
 
+# Private Documents
+interview.md
+
 # Editor / IDE
 .vscode/
 .idea/
