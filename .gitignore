@@ -6,6 +6,9 @@ build/
 
 # Private Documents
 interview.md
+out.txt
+result.txt
+test.txt
 
 # Editor / IDE
 .vscode/
