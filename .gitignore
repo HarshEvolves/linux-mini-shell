@@ -2,6 +2,7 @@
 build/
 *.o
 *.out
+*.log
 
 # Editor / IDE
 .vscode/

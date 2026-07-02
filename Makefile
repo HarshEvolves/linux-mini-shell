@@ -1,5 +1,5 @@
-CC      = gcc
-CFLAGS  = -Wall -Wextra -Werror -std=c99 -pedantic
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror -std=c99 -Iinclude
 SRC_DIR = src
 BUILD_DIR = build
 TARGET  = $(BUILD_DIR)/minishell
