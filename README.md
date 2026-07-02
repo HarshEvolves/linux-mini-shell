@@ -9,6 +9,10 @@
 ## 📌 Project Overview
 A lightweight, POSIX-compliant UNIX shell written in C from scratch. This project demonstrates core operating system concepts such as process creation, inter-process communication (IPC), file descriptor manipulation, and robust signal handling. It closely mirrors the behavior of standard shells like `bash` or `sh` while remaining modular and heavily documented.
 
+## 🎥 Demo
+
+![Linux Mini Shell Demo](assets/demo.gif)
+
 ## ✨ Features
 - **Execution:** Runs standard foreground and background (`&`) processes.
 - **Pipelining:** Supports unlimited chained pipelines (e.g., `ls -l | grep src | wc -l`).
