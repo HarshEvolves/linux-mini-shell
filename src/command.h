@@ -1,7 +1,8 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
-#define MAX_ARGS 64
+#define MAX_ARGS     64
+#define MAX_PIPELINE 32   /* max number of commands in a single pipeline */
 
 /**
  * struct Command - Represents a single parsed shell command.

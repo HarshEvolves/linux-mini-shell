@@ -3,104 +3,119 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include "command.h"
-#include "parser.h"
 #include "redirect.h"
 #include "pipe.h"
 
 /**
- * run_child - Helper that applies redirection and exec's a command.
- * @cmd: A fully parsed Command.
+ * close_all_pipes - Closes every file descriptor in the pipe array.
+ * @pipefd:    Array of pipe fd pairs.
+ * @num_pipes: Number of pipes (N-1 for N commands).
+ */
+static void close_all_pipes(int pipefd[][2], int num_pipes)
+{
+    for (int i = 0; i < num_pipes; i++) {
+        close(pipefd[i][0]);
+        close(pipefd[i][1]);
+    }
+}
+
+/**
+ * run_child - Wires pipe fds, applies redirection, and exec's a command.
+ * @cmd:       The Command to execute.
+ * @index:     Position of this command in the pipeline (0-based).
+ * @num_cmds:  Total number of commands.
+ * @pipefd:    Array of pipe fd pairs.
+ * @num_pipes: Number of pipes.
  *
  * This function never returns — it either replaces the process via
  * execvp() or exits on failure.
+ *
+ * Wiring rules:
+ *   - If not the first command:  stdin  ← pipefd[index-1] read end.
+ *   - If not the last command:   stdout → pipefd[index] write end.
+ *   - All pipe fds are closed after dup2().
+ *   - File redirection (< / > / >>) is applied after pipe wiring,
+ *     allowing e.g. the last command to redirect output to a file.
  */
-static void run_child(const Command *cmd)
+static void run_child(const Command *cmd, int index, int num_cmds,
+                       int pipefd[][2], int num_pipes)
 {
+    /* Wire stdin from previous pipe (skip for first command) */
+    if (index > 0)
+        dup2(pipefd[index - 1][0], STDIN_FILENO);
+
+    /* Wire stdout to next pipe (skip for last command) */
+    if (index < num_cmds - 1)
+        dup2(pipefd[index][1], STDOUT_FILENO);
+
+    /* Close all pipe fds — the child only uses the dup'd copies */
+    close_all_pipes(pipefd, num_pipes);
+
+    /* Apply any file-based I/O redirection */
     apply_redirection(cmd);
+
+    /* Replace this process with the command */
     execvp(cmd->argv[0], cmd->argv);
     perror(cmd->argv[0]);
     exit(EXIT_FAILURE);
 }
 
 /**
- * execute_pipe - Runs two commands connected by a single pipe.
- * @argv: Full argument list containing a '|' token at position @pipe_pos.
- * @pipe_pos: Index of the '|' token in argv.
+ * execute_pipeline - Runs N commands connected by N-1 pipes.
+ * @cmds:     Array of fully parsed Command structures.
+ * @num_cmds: Number of commands in the pipeline (>= 1).
  *
  * Execution flow:
- *   1. Split argv into left and right halves at the '|' token.
- *   2. Validate both sides are non-empty.
- *   3. Parse each side into a Command (argv + redirection).
- *   4. Create the pipe.
- *   5. Fork the left child  — stdout → pipe write end.
- *   6. Fork the right child — stdin  → pipe read end.
- *   7. Parent closes both pipe ends and waits for both children.
+ *   1. Create N-1 pipes.
+ *   2. Fork N children, each wired to the appropriate pipe ends.
+ *   3. Parent closes all pipe file descriptors.
+ *   4. Parent waits for every child process to finish.
+ *
+ * For a single command (num_cmds == 1), no pipes are created and
+ * the command is simply forked and exec'd.
  */
-void execute_pipe(char *argv[], int pipe_pos)
+void execute_pipeline(Command cmds[], int num_cmds)
 {
-    /* --- Step 1: split argv at the pipe token ---------------------------- */
-    argv[pipe_pos] = NULL;
-    char **left_argv  = argv;               /* tokens before '|' */
-    char **right_argv = &argv[pipe_pos + 1]; /* tokens after  '|' */
+    int num_pipes = num_cmds - 1;
+    int pipefd[MAX_PIPELINE][2];
+    pid_t pids[MAX_PIPELINE];
 
-    /* --- Step 2: validate both sides ------------------------------------ */
-    if (left_argv[0] == NULL || right_argv[0] == NULL) {
-        fprintf(stderr, "syntax error: invalid pipe\n");
-        return;
+    /* --- Step 1: create all pipes --------------------------------------- */
+    for (int i = 0; i < num_pipes; i++) {
+        if (pipe(pipefd[i]) < 0) {
+            perror("pipe");
+            /* Close any pipes already created */
+            for (int j = 0; j < i; j++) {
+                close(pipefd[j][0]);
+                close(pipefd[j][1]);
+            }
+            return;
+        }
     }
 
-    /* --- Step 3: parse each side into a Command ------------------------- */
-    Command left_cmd, right_cmd;
-    if (parse_command(left_argv, &left_cmd) != 0)
-        return;
-    if (parse_command(right_argv, &right_cmd) != 0)
-        return;
+    /* --- Step 2: fork one child per command ------------------------------ */
+    for (int i = 0; i < num_cmds; i++) {
+        pids[i] = fork();
+        if (pids[i] < 0) {
+            perror("fork");
+            close_all_pipes(pipefd, num_pipes);
+            /* Wait for any children already forked */
+            for (int j = 0; j < i; j++)
+                waitpid(pids[j], NULL, 0);
+            return;
+        }
 
-    /* --- Step 4: create the pipe ---------------------------------------- */
-    int pipefd[2];
-    if (pipe(pipefd) < 0) {
-        perror("pipe");
-        return;
+        if (pids[i] == 0) {
+            /* Child process — wire pipes, apply redirection, exec */
+            run_child(&cmds[i], i, num_cmds, pipefd, num_pipes);
+            /* run_child never returns */
+        }
     }
 
-    /* --- Step 5: left child — writes to the pipe ------------------------ */
-    pid_t pid_left = fork();
-    if (pid_left < 0) {
-        perror("fork");
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return;
-    }
+    /* --- Step 3: parent closes all pipe fds ------------------------------ */
+    close_all_pipes(pipefd, num_pipes);
 
-    if (pid_left == 0) {
-        /* Map stdout to the pipe write end */
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]);
-        close(pipefd[1]);
-        run_child(&left_cmd);  /* does not return */
-    }
-
-    /* --- Step 6: right child — reads from the pipe ---------------------- */
-    pid_t pid_right = fork();
-    if (pid_right < 0) {
-        perror("fork");
-        close(pipefd[0]);
-        close(pipefd[1]);
-        waitpid(pid_left, NULL, 0);
-        return;
-    }
-
-    if (pid_right == 0) {
-        /* Map stdin to the pipe read end */
-        dup2(pipefd[0], STDIN_FILENO);
-        close(pipefd[0]);
-        close(pipefd[1]);
-        run_child(&right_cmd);  /* does not return */
-    }
-
-    /* --- Step 7: parent — close pipe, wait for both children ------------ */
-    close(pipefd[0]);
-    close(pipefd[1]);
-    waitpid(pid_left, NULL, 0);
-    waitpid(pid_right, NULL, 0);
+    /* --- Step 4: wait for every child ------------------------------------ */
+    for (int i = 0; i < num_cmds; i++)
+        waitpid(pids[i], NULL, 0);
 }

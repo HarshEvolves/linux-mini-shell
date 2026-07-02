@@ -74,9 +74,13 @@ void shell_loop(void)
         /* Check for a pipe and route accordingly */
         int pipe_pos = find_pipe(argv);
         if (pipe_pos >= 0) {
-            execute_pipe(argv, pipe_pos);
+            /* Pipeline: split into Command array and execute */
+            Command cmds[MAX_PIPELINE];
+            int num_cmds = parse_pipeline(argv, cmds, MAX_PIPELINE);
+            if (num_cmds > 0)
+                execute_pipeline(cmds, num_cmds);
         } else {
-            /* Build a Command from the tokenized argv and execute it */
+            /* Single command: parse and execute directly */
             Command cmd;
             if (parse_command(argv, &cmd) == 0)
                 execute_command(&cmd);

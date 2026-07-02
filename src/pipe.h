@@ -1,18 +1,20 @@
 #ifndef PIPE_H
 #define PIPE_H
 
+#include "command.h"
+
 /**
- * execute_pipe - Runs two commands connected by a single pipe.
- * @argv: Full argument list containing a '|' token at position @pipe_pos.
- * @pipe_pos: Index of the '|' token in argv.
+ * execute_pipeline - Runs N commands connected by N-1 pipes.
+ * @cmds:     Array of fully parsed Command structures.
+ * @num_cmds: Number of commands in the pipeline (>= 1).
  *
- * Splits argv into left (before '|') and right (after '|') commands.
- * Creates a pipe via pipe(), forks two child processes:
- *   - Left child:  stdout → pipe write end, then execvp().
- *   - Right child: stdin  → pipe read end,  then execvp().
- * Each child also applies any I/O redirection (< / > / >>).
- * The parent closes the pipe and waits for both children.
+ * For N commands, creates N-1 pipes and forks N children:
+ *   - First child:   stdout → pipe[0] write end.
+ *   - Middle child i: stdin ← pipe[i-1] read end, stdout → pipe[i] write end.
+ *   - Last child:    stdin ← pipe[N-2] read end.
+ * Each child also applies its own I/O redirection (< / > / >>).
+ * The parent closes all pipe file descriptors and waits for every child.
  */
-void execute_pipe(char *argv[], int pipe_pos);
+void execute_pipeline(Command cmds[], int num_cmds);
 
 #endif /* PIPE_H */

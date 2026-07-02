@@ -94,3 +94,63 @@ int find_pipe(char *argv[])
     }
     return -1;
 }
+
+/**
+ * parse_pipeline - Splits a tokenized argument list at '|' tokens and
+ *                  builds an array of Command objects.
+ * @argv:     The full tokenized argument list (modified in place — '|'
+ *            tokens are replaced with NULL to create segments).
+ * @cmds:     Output array of Command structures.
+ * @max_cmds: Maximum number of commands the array can hold.
+ *
+ * Walks argv looking for '|' tokens.  Each segment between pipes is
+ * passed to parse_command() which extracts redirection and fills the
+ * Command.  Validates that no segment is empty.
+ *
+ * Return: Number of commands parsed (>= 1), or -1 on error.
+ */
+int parse_pipeline(char *argv[], Command cmds[], int max_cmds)
+{
+    int num_cmds = 0;
+    int start = 0;
+
+    for (int i = 0; argv[i] != NULL; i++) {
+        if (strcmp(argv[i], "|") == 0) {
+            /* Replace '|' with NULL to terminate this segment */
+            argv[i] = NULL;
+
+            /* Validate: segment must not be empty */
+            if (argv[start] == NULL) {
+                fprintf(stderr, "syntax error: empty command in pipeline\n");
+                return -1;
+            }
+            if (num_cmds >= max_cmds) {
+                fprintf(stderr, "error: too many commands in pipeline\n");
+                return -1;
+            }
+
+            /* Parse this segment into a Command */
+            if (parse_command(&argv[start], &cmds[num_cmds]) != 0)
+                return -1;
+            num_cmds++;
+
+            /* Next segment starts after the '|' */
+            start = i + 1;
+        }
+    }
+
+    /* Parse the final segment (after the last '|', or the only command) */
+    if (argv[start] == NULL) {
+        fprintf(stderr, "syntax error: empty command in pipeline\n");
+        return -1;
+    }
+    if (num_cmds >= max_cmds) {
+        fprintf(stderr, "error: too many commands in pipeline\n");
+        return -1;
+    }
+    if (parse_command(&argv[start], &cmds[num_cmds]) != 0)
+        return -1;
+    num_cmds++;
+
+    return num_cmds;
+}

@@ -30,4 +30,15 @@ int parse_command(char *argv[], Command *cmd);
  */
 int find_pipe(char *argv[]);
 
+/**
+ * parse_pipeline - Splits a tokenized argument list at '|' tokens and
+ *                  builds an array of Command objects.
+ * @argv:     The full tokenized argument list (modified in place).
+ * @cmds:     Output array of Command structures.
+ * @max_cmds: Maximum number of commands the array can hold.
+ *
+ * Return: Number of commands parsed (>= 1), or -1 on error.
+ */
+int parse_pipeline(char *argv[], Command cmds[], int max_cmds);
+
 #endif /* PARSER_H */
