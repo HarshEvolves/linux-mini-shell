@@ -154,3 +154,25 @@ int parse_pipeline(char *argv[], Command cmds[], int max_cmds)
 
     return num_cmds;
 }
+
+/**
+ * strip_background - Checks for and removes a trailing '&' token.
+ * @argv: NULL-terminated argument array (modified in place).
+ *
+ * If the last token in argv is "&", it is replaced with NULL
+ * (effectively removing it from the argument list).
+ *
+ * Return: 1 if '&' was found and removed, 0 otherwise.
+ */
+int strip_background(char *argv[])
+{
+    int i = 0;
+    while (argv[i] != NULL)
+        i++;
+
+    if (i > 0 && strcmp(argv[i - 1], "&") == 0) {
+        argv[i - 1] = NULL;
+        return 1;
+    }
+    return 0;
+}

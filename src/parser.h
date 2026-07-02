@@ -41,4 +41,12 @@ int find_pipe(char *argv[]);
  */
 int parse_pipeline(char *argv[], Command cmds[], int max_cmds);
 
+/**
+ * strip_background - Checks for and removes a trailing '&' token.
+ * @argv: NULL-terminated argument array (modified in place).
+ *
+ * Return: 1 if '&' was found and removed, 0 otherwise.
+ */
+int strip_background(char *argv[]);
+
 #endif /* PARSER_H */

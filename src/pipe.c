@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include "command.h"
 #include "redirect.h"
+#include "signals.h"
 #include "pipe.h"
 
 /**
@@ -51,6 +53,9 @@ static void run_child(const Command *cmd, int index, int num_cmds,
     /* Close all pipe fds — the child only uses the dup'd copies */
     close_all_pipes(pipefd, num_pipes);
 
+    /* Restore default signal handling for the child */
+    signals_child_reset();
+
     /* Apply any file-based I/O redirection */
     apply_redirection(cmd);
 
@@ -69,12 +74,13 @@ static void run_child(const Command *cmd, int index, int num_cmds,
  *   1. Create N-1 pipes.
  *   2. Fork N children, each wired to the appropriate pipe ends.
  *   3. Parent closes all pipe file descriptors.
- *   4. Parent waits for every child process to finish.
+ *   4. In foreground mode, parent waits for every child.
+ *      In background mode, parent returns immediately.
  *
  * For a single command (num_cmds == 1), no pipes are created and
  * the command is simply forked and exec'd.
  */
-void execute_pipeline(Command cmds[], int num_cmds)
+void execute_pipeline(Command cmds[], int num_cmds, int background)
 {
     int num_pipes = num_cmds - 1;
     int pipefd[MAX_PIPELINE][2];
@@ -115,7 +121,17 @@ void execute_pipeline(Command cmds[], int num_cmds)
     /* --- Step 3: parent closes all pipe fds ------------------------------ */
     close_all_pipes(pipefd, num_pipes);
 
-    /* --- Step 4: wait for every child ------------------------------------ */
-    for (int i = 0; i < num_cmds; i++)
-        waitpid(pids[i], NULL, 0);
+    /* --- Step 4: wait or return ------------------------------------------ */
+    if (background) {
+        /* Background: print the PID of the last command and return */
+        printf("[%d]\n", pids[num_cmds - 1]);
+    } else {
+        /* Foreground: wait for every child to finish */
+        for (int i = 0; i < num_cmds; i++) {
+            while (waitpid(pids[i], NULL, 0) == -1) {
+                if (errno != EINTR)
+                    break;
+            }
+        }
+    }
 }

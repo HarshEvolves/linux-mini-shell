@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "command.h"
 #include "parser.h"
 #include "execute.h"
 #include "pipe.h"
 #include "builtin.h"
 #include "history.h"
+#include "signals.h"
 #include "shell.h"
 
 #define PROMPT "myshell$ "
@@ -19,6 +21,7 @@
  * Displays the prompt, reads input, dispatches built-in commands
  * (cd, exit, history) via the builtin module, and delegates external
  * commands and pipes to the execute / pipe modules.
+ * Supports background execution via a trailing '&' token.
  * Exits on EOF (Ctrl+D) or the "exit" command.
  */
 void shell_loop(void)
@@ -28,6 +31,9 @@ void shell_loop(void)
     ssize_t nread;
     char *argv[MAX_ARGS];
 
+    /* Install signal handlers (SIGINT ignored, SIGCHLD reaps bg children) */
+    signals_init();
+
     while (1) {
         /* Display the prompt */
         printf("%s", PROMPT);
@@ -36,6 +42,11 @@ void shell_loop(void)
         /* Read a line of input; getline() allocates/resizes the buffer */
         nread = getline(&line, &len, stdin);
         if (nread == -1) {
+            if (errno == EINTR) {
+                /* Interrupted by SIGINT (Ctrl+C), reset and prompt again */
+                clearerr(stdin);
+                continue;
+            }
             /* EOF (Ctrl+D) — exit gracefully */
             printf("\n");
             break;
@@ -64,6 +75,13 @@ void shell_loop(void)
             history_add(save);
         free(save);
 
+        /* Check for a trailing '&' (background request) */
+        int background = strip_background(argv);
+
+        /* After stripping '&', argv may now be empty */
+        if (argv[0] == NULL)
+            continue;
+
         /* Dispatch built-in commands (cd, exit, history) */
         if (is_builtin(argv[0])) {
             if (execute_builtin(argv) == BUILTIN_EXIT)
@@ -78,12 +96,12 @@ void shell_loop(void)
             Command cmds[MAX_PIPELINE];
             int num_cmds = parse_pipeline(argv, cmds, MAX_PIPELINE);
             if (num_cmds > 0)
-                execute_pipeline(cmds, num_cmds);
+                execute_pipeline(cmds, num_cmds, background);
         } else {
             /* Single command: parse and execute directly */
             Command cmd;
             if (parse_command(argv, &cmd) == 0)
-                execute_command(&cmd);
+                execute_command(&cmd, background);
         }
     }
 
