@@ -5,20 +5,23 @@
 ![POSIX](https://img.shields.io/badge/POSIX-000000?style=for-the-badge&logo=linux&logoColor=white)
 ![Makefile](https://img.shields.io/badge/Makefile-000000?style=for-the-badge&logo=gnu&logoColor=white)
 ![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
+![Release](https://img.shields.io/badge/release-v1.0.0-blue)
 
-## 📌 Project Overview
-A lightweight, POSIX-compliant UNIX shell written in C from scratch. This project demonstrates core operating system concepts such as process creation, inter-process communication (IPC), file descriptor manipulation, and robust signal handling. It closely mirrors the behavior of standard shells like `bash` or `sh` while remaining modular and heavily documented.
+## 📌 Project Description
+A lightweight, professional, POSIX-compliant UNIX CLI application written in C from scratch. This project demonstrates core operating system concepts such as process creation, inter-process communication (IPC), file descriptor manipulation, and robust signal handling. It closely mirrors the behavior of standard shells like `bash` or `sh` while remaining modular, highly documented, and extremely easy to install.
 
 ## 🎥 Demo
 
 ![Linux Mini Shell Demo](assets/demo.gif)
 
 ## ✨ Features
+- **Global Executable:** Install globally as `/usr/local/bin/minishell`.
 - **Execution:** Runs standard foreground and background (`&`) processes.
 - **Pipelining:** Supports unlimited chained pipelines (e.g., `ls -l | grep src | wc -l`).
 - **I/O Redirection:** Handles input (`<`), output (`>`), and append (`>>`) file redirection.
 - **Built-in Commands:** `cd`, `exit`, and `history`.
 - **Signal Handling:** Gracefully handles `SIGINT` (Ctrl+C) without crashing, and automatically reaps background zombie processes via `SIGCHLD`.
+- **CLI Options:** Supports standard `--help` and `--version` flags.
 
 ## 🏗️ Architecture Overview
 The shell is built with a clean, modular architecture separating concerns across dedicated C modules:
@@ -35,17 +38,15 @@ The shell is built with a clean, modular architecture separating concerns across
 linux-mini-shell/
 ├── Makefile
 ├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── install.sh
+├── uninstall.sh
+├── docs/
+├── assets/
+├── tests/
+├── include/
 └── src/
-    ├── builtin.c / builtin.h
-    ├── command.c / command.h
-    ├── execute.c / execute.h
-    ├── history.c / history.h
-    ├── main.c
-    ├── parser.c / parser.h
-    ├── pipe.c / pipe.h
-    ├── redirect.c / redirect.h
-    ├── shell.c / shell.h
-    └── signals.c / signals.h
 ```
 
 ## 🛠️ System Calls Used
@@ -56,54 +57,65 @@ This project extensively utilizes UNIX system calls to interface directly with t
 - **Signals**: `signal()`, `sigaction()`, `kill()`
 - **Environment**: `chdir()`
 
-## 🚀 Build Instructions
-To build and run the project locally, ensure you have `gcc` and `make` installed.
+## 🚀 Installation
 
+We support two ways to install `minishell` globally.
+
+### Option 1: Quick Install (Recommended)
+You can automatically clone, build, and install the shell directly from GitHub:
 ```bash
-# Clone the repository
+curl -fsSL https://raw.githubusercontent.com/HarshEvolves/linux-mini-shell/main/install.sh | bash
+```
+
+### Option 2: Build From Source
+If you prefer to manually build the source:
+```bash
+# 1. Clone the repository
 git clone https://github.com/HarshEvolves/linux-mini-shell.git
 cd linux-mini-shell
 
-# Build the project
+# 2. Compile the project
 make
 
-# Run the shell
-make run
-# OR manually run: ./build/minishell
+# 3. Install globally (creates /usr/local/bin/minishell)
+sudo make install
+```
+
+## ⚡ Quick Start
+
+After installation, `minishell` acts as a global executable. You can run it from anywhere!
+
+```bash
+# Launch the shell
+minishell
+
+# Display help menu
+minishell --help
+
+# Check version
+minishell --version
 ```
 
 ## 💡 Usage Examples
 
-**Standard Execution & Backgrounding**
 ```bash
-myshell$ ls -la
-myshell$ sleep 10 &
-[12345]
-```
+myshell$ pwd
+/Users/harsh/linux-mini-shell
 
-**Unlimited Pipelining**
-```bash
-myshell$ cat README.md | grep "C" | wc -l
-```
+myshell$ ls
+Makefile  README.md  src  include  tests  assets  docs  install.sh  uninstall.sh
 
-**I/O Redirection**
-```bash
-myshell$ echo "Hello, World!" > output.txt
-myshell$ cat < output.txt >> history.log
-```
+myshell$ echo Hello
+Hello
 
-**Signal Resilience**
-```bash
-myshell$ sleep 10
-^C  # Kills the sleeping child, but returns cleanly to the shell prompt
-myshell$ 
-```
+myshell$ echo Hello > out.txt
 
-## 🧠 Key OS Concepts Demonstrated
-1. **Process Forking & Execution:** Replacing a child process image with a new executable while preserving parent state.
-2. **Zombie Process Reaping:** Using non-blocking `waitpid(WNOHANG)` inside a `SIGCHLD` handler to prevent resource leaks.
-3. **File Descriptor Chaining:** Routing `stdout` of one process into the `stdin` of another using kernel pipes and `dup2()`.
-4. **Interruption Safety:** Safely handling `EINTR` errors from blocking calls like `getline()` and `waitpid()` when signals are caught.
+myshell$ cat out.txt
+Hello
+
+myshell$ ls | grep main
+main.c
+```
 
 ## 🚀 Future Improvements
 - **Logical Operators:** Support for `&&` and `||`.
@@ -111,5 +123,8 @@ myshell$
 - **Quoting & Escaping:** Support for parsing strings containing spaces inside double/single quotes.
 - **Environment Variables:** Support for expanding `$VAR` variables and `export`.
 
-## 🎓 Learning Outcomes
-Building this shell provided deep, hands-on experience with systems programming in C, kernel-level process management, memory safety (avoiding leaks across forks), and designing robust architectures that can safely handle asynchronous OS signals.
+## 🤝 Contributing
+Contributions are always welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get started.
+
+## 📄 License
+This project is open-source. See the `LICENSE` file for details.
