@@ -5,7 +5,6 @@
 ![POSIX](https://img.shields.io/badge/POSIX-000000?style=for-the-badge&logo=linux&logoColor=white)
 ![Makefile](https://img.shields.io/badge/Makefile-000000?style=for-the-badge&logo=gnu&logoColor=white)
 ![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
-![Release](https://img.shields.io/badge/release-v1.0.0-blue)
 
 ## 📌 Project Description
 A lightweight, professional, POSIX-compliant UNIX CLI application written in C from scratch. This project demonstrates core operating system concepts such as process creation, inter-process communication (IPC), file descriptor manipulation, and robust signal handling. It closely mirrors the behavior of standard shells like `bash` or `sh` while remaining modular, highly documented, and extremely easy to install.
@@ -15,7 +14,6 @@ A lightweight, professional, POSIX-compliant UNIX CLI application written in C f
 ![Linux Mini Shell Demo](assets/demo.gif)
 
 ## ✨ Features
-- **Global Executable:** Install globally as `/usr/local/bin/minishell`.
 - **Execution:** Runs standard foreground and background (`&`) processes.
 - **Pipelining:** Supports unlimited chained pipelines (e.g., `ls -l | grep src | wc -l`).
 - **I/O Redirection:** Handles input (`<`), output (`>`), and append (`>>`) file redirection.
@@ -40,8 +38,6 @@ linux-mini-shell/
 ├── README.md
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
-├── install.sh
-├── uninstall.sh
 ├── docs/
 ├── assets/
 ├── tests/
@@ -57,43 +53,30 @@ This project extensively utilizes UNIX system calls to interface directly with t
 - **Signals**: `signal()`, `sigaction()`, `kill()`
 - **Environment**: `chdir()`
 
-## 🚀 Installation
+## 🚀 Build & Run
 
-We support two ways to install `minishell` globally.
+To build and run the project locally, ensure you have `gcc` and `make` installed.
 
-### Option 1: Quick Install (Recommended)
-You can automatically clone, build, and install the shell directly from GitHub:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HarshEvolves/linux-mini-shell/main/install.sh | bash
-```
-
-### Option 2: Build From Source
-If you prefer to manually build the source:
-```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/HarshEvolves/linux-mini-shell.git
 cd linux-mini-shell
 
-# 2. Compile the project
+# Build the project
 make
 
-# 3. Install globally (creates /usr/local/bin/minishell)
-sudo make install
+# Run the shell
+./minishell
 ```
 
 ## ⚡ Quick Start
 
-After installation, `minishell` acts as a global executable. You can run it from anywhere!
-
 ```bash
-# Launch the shell
-minishell
-
 # Display help menu
-minishell --help
+./minishell --help
 
 # Check version
-minishell --version
+./minishell --version
 ```
 
 ## 💡 Usage Examples
@@ -103,7 +86,7 @@ myshell$ pwd
 /Users/harsh/linux-mini-shell
 
 myshell$ ls
-Makefile  README.md  src  include  tests  assets  docs  install.sh  uninstall.sh
+Makefile  README.md  src  include  tests  assets  docs
 
 myshell$ echo Hello
 Hello
